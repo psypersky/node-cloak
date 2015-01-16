@@ -1,0 +1,40 @@
+{
+  "name": "cloak",
+  "version": "1.0.0",
+  "description": "NodeJS-powered Tor Gateway",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/d-oliveros/cloak"
+  },
+  "keywords": [
+    "tor",
+    "proxy",
+    "socks5",
+    "anonymous",
+    "anonimyzer"
+  ],
+  "author": "David Oliveros",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/d-oliveros/cloak/issues"
+  },
+  "homepage": "https://github.com/d-oliveros/cloak",
+  "devDependencies": {
+    "chai": "^1.10.0",
+    "gulp": "^3.8.10",
+    "gulp-jshint": "^1.9.0",
+    "jshint-stylish": "^1.0.0",
+    "socks5-http-client": "^0.1.6"
+  },
+  "dependencies": {
+    "async": "^0.9.0",
+    "debug": "^2.1.1",
+    "express": "^4.11.0",
+    "lodash": "^2.4.1",
+    "ths": "^2.1.2"
+  }
+}

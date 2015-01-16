@@ -1,0 +1,10 @@
+#!/usr/bin/env node
+var cloak = require('../lib/cloak');
+var app = require('../server/app');
+
+cloak.connect( function(err) {
+	app.listen( app.get('port'), function(err) {
+		if (err) throw err;
+		console.log('API listening on http://localhost:'+app.get('port'));
+	});
+});
