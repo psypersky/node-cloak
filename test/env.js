@@ -1,3 +1,4 @@
+process.env.NODE_ENV = 'test';
 require("babel-polyfill");
 require('babel-core/register');
-require('./lib/cloak');
+require('../loadenv');

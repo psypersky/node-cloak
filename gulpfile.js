@@ -1,5 +1,5 @@
 var gulp = require('gulp');
-var jshint = require('gulp-jshint');
+var eslint = require('gulp-eslint');
 
 var sources = [
 	'index.js',
@@ -12,8 +12,9 @@ var sources = [
 
 gulp.task('lint', function() {
 	return gulp.src(sources)
-		.pipe(jshint())
-		.pipe(jshint.reporter('jshint-stylish'));
+    .pipe(eslint())
+    .pipe(eslint.formatEach(null, console.log.bind(console)))
+    .pipe(eslint.failOnError());
 });
 
 gulp.task('clearREPL', function() {
