@@ -41,6 +41,8 @@
     "lodash": "^2.4.1",
     "mkdirp": "^0.5.1",
     "promisify-node": "^0.3.0",
+    "request": "^2.67.0",
+    "socks5-https-client": "^1.1.2",
     "ths": "^2.1.2",
     "util-inspect": "^0.1.8"
   }

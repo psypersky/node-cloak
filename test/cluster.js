@@ -1,4 +1,4 @@
-import shttp from 'socks5-http-client';
+import shttp from 'socks5-https-client';
 import url from 'url';
 import debug from 'debug';
 import path from 'path';
@@ -45,13 +45,15 @@ describe('Cloak', function() {
     expect(ports.length).to.equal(uniq(ports).length);
   });
 
-  xit('should return two different IP addresses', async () => {
+  it('should return two different IP addresses', async () => {
     const promises = times(TOR_GATEWAYS, () => {
       let port = cluster.getPort();
       return requestWithSocks5Proxy('http://icanhazip.com', port);
     });
 
-    await Promise.all(promises);
+    const ips = await Promise.all(promises);
+
+    expect(uniq(ips).length).to.equal(parseInt(TOR_GATEWAYS, 10));
   });
 });
 
@@ -59,21 +61,22 @@ function requestWithSocks5Proxy(href, port) {
   return new Promise((resolve, reject) => {
     const params = url.parse(href);
     params.socksPort = port;
+    params.socksHost = '127.0.0.1';
 
-    console.log('Requesting', params);
-
-    try {
-      const req = shttp.get(params, (res) => {
+    const req = shttp.get({
+        hostname: 'icanhazip.com',
+        socksPort: port,
+        socksHost: '127.0.0.1',
+        path: '/',
+        rejectUnauthorized: true // This is the default.
+    }, function(res) {
         res.setEncoding('utf8');
-        res.on('readable', () => {
-          const data = res.read();
-          console.log(data);
+        res.on('readable', function() {
+            resolve(res.read());
         });
-      });
+    });
 
-      req.on('error', reject);
-    } catch (err) {
-      console.error(err);
-    }
+    req.on('error', reject);
+
   });
 }
