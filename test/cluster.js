@@ -8,7 +8,7 @@ import Cluster from '../lib/cluster';
 
 const { TOR_GATEWAYS } = process.env;
 
-describe('Cloak', function() {
+describe('Cluster', function() {
   this.timeout(300000); // 5 minutes
 
   const cluster = new Cluster(path.resolve(__dirname, 'data'));
