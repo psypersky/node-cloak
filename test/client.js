@@ -1,94 +1,41 @@
-import ms from 'ms';
-import uuid from 'uuid';
+import { expect } from 'chai';
+import sinon from 'sinon';
+import Client from '../src/client';
+import constants from '../src/constants';
 
-const constants = {
-  PROXY_REQUEST: 'proxy:request',
-  PROXY_SUPPLY: 'proxy:supply',
-  PROXY_LINK: 'proxy:link',
-  PROXY_HEARTBEAT: 'proxy:heartbeat',
-  PROXY_LINK_DROP: 'proxy:link:drop',
-  PROXY_DROP: 'proxy:drop'
-};
+const { PROXY_REQUEST, PROXY_SUPPLY } = constants;
 
-const { PROXY_REQUEST } = constants;
-const PROXY_REQUEST_INTERVAL = ms(1, 'second');
+describe('Client', function() {
+  it('should connect to redis and wait for ready state', async () => {
+    const client = new Client();
 
-export default class Client{
-  constructor() {
-    this.proxy = null;
-    this.id = uuid.v4();
-    this.onProxySupply = ::this.onProxySupply;
-    this.onProxyLink = ::this.onProxyLink;
-    this.onProxyClosed = ::this.onProxyClosed;
-  }
+    expect(client.proxy).to.equal(null);
+    expect(client.pubsub).to.equal(null);
+    expect(client.connecting).to.equal(false);
 
-  getProxy() {
-    const emitProxyRequest = this._pubsub.send(PROXY_REQUEST).bind(this);
-    this.proxyRequesterInterval = setInterval(emitProxyRequest, PROXY_REQUEST_INTERVAL);
-    this.onceMessage(PROXY_SUPPLY, this.onProxySupply);
-  }
+    const promise = client.connect();
 
-  onProxySupply({ hostId }) {
-    this.removeRedisListeners();
-    this.message(PROXY_LINK, hostId);
-    this.once(PROXY_LINK, this.onProxyLink);
-    this.once(PROXY_LINK_DROP, this.onProxyLinkDrop);
-  }
+    expect(client.connecting).to.equal(true);
+    expect(client.pubsub).to.equal(null);
 
-  onProxyLink(data) {
-    this.proxy = new ProxyLink(data);
-    this.on(PROXY_DROP, this.onProxyDrop);
+    await promise;
 
-  }
+    expect(client.connecting).to.equal(false);
+    expect(client.pubsub).to.be.an('object');
+  });
 
-  onProxyLinkDrop() {
-    this.removeAllListeners();
-    this.getProxy();
-  }
+  it('should try to get a proxy and timeout', async () => {
+    const spy = sinon.spy();
 
-  onProxyClose() {
-    this.proxy = null;
-  }
+    const config = {
+      requestTimeout: 90,
+      requestInterval: 20
+    };
 
-  removeRedisListeners() {
-    clearInterval(this.proxyRequesterInterval);
-    this.removeListener(PROXY_SUPPLY, this.onProxySupply);
-    this.removeListener(PROXY_LINK, this.onProxyLink);
-  }
-}
+    const client = new Client(config);
 
-class ProxyLink {
-  constructor({ client, host, port, clusterId }) {
-    this.active = true;
-    this.host = host;
-    this.port = port;
-    this.client = client;
-    this.clusterId = clusterId;
-    this.heartbeatInterval = null;
-    this.onProxyDrop = ::this.onProxyDrop;
+    await client.connect();
 
-    this.heartbeatInterval = setInterval(::this.emitHeartbeat, PROXY_LINK_HEARTBEAT);
-
-    this.client.onceMessage(PROXY_DROP, this.onProxyDrop);
-  }
-
-  startHeartbeats() {
-    this.heartbeatInterval = setInterval(::this.emitHeartbeat, PROXY_LINK_HEARTBEAT);
-  }
-
-  emitHeartbeat() {
-    this.client.sendMessage(PROXY_HEARTBEAT, this.clusterId, {
-      port: this.port
-    });
-  }
-
-  onProxyDrop() {
-    clearInterval(this.heartbeatInterval);
-    this.client.removeListener(PROXY_DROP, this.onProxyDrop);
-    this.client.emit(PROXY_DROP);
-    this.active = false;
-    this.host = null;
-    this.port = null;
-    this.client = null;
-  }
-}
+    client.on('');
+  });
+});

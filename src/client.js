@@ -1,47 +1,90 @@
 import ms from 'ms';
 import createError from 'http-errors';
 import invariant from 'invariant';
+import shortid from 'shortid';
+import inspect from 'util-inspect';
+import { isObject } from 'lodash';
 import { EventEmitter } from 'events';
-import createRedisPubSub from './redis-pubsub';
+import { createRedisPubSub } from './pubsub';
+import constants from './constants';
+import ProxyLink from './ProxyLink';
 
-const PROXY_REQUEST = 'proxy:request';
-const PROXY_SUPPLY = 'proxy:supply';
-const PROXY_LINK = 'proxy:link';
-const PROXY_HEARTBEAT = 'proxy:heartbeat';
-const PROXY_LINK_DROP = 'proxy:link:drop';
-const PROXY_DROP = 'proxy:drop';
+const {
+  PROXY_REQUEST,
+  PROXY_SUPPLY,
+  PROXY_LINK,
+  PROXY_LINK_DROP,
+  PROXY_READY,
+  PROXY_DROP
+} = constants;
 
+const debug = require('debug')('cloak:client');
 const PROXY_REQUEST_INTERVAL = ms(1, 'second');
 const PROXY_REQUEST_TIMEOUT = ms(20, 'second');
 
 export default class Client extends EventEmitter {
-  constructor() {
+  constructor(config = {}) {
+    invariant(isObject(config), 'Invalid config');
+
+    super();
+
     this.proxy = null;
     this.pubsub = null;
+    this.connecting = false;
+    this.id = shortid.generate();
+
+    this.requestInterval = config.requestInterval || PROXY_REQUEST_INTERVAL;
+    this.requestTimeout = config.requestTimeout || PROXY_REQUEST_TIMEOUT;
+
     this.onProxySupply = ::this.onProxySupply;
     this.onProxyLink = ::this.onProxyLink;
     this.onProxyClosed = ::this.onProxyClosed;
     this.onProxyReady = ::this.onProxyReady;
+
+    debug(`Creating new client`);
+  }
+
+  debug(msg) {
+    debug(`[${this.id}] ${msg}`);
   }
 
   async connect(port, host) {
-    this.pubsub = await createRedisPubSub(port, host, this);
+    this.connecting = true;
+
+    host = host || '127.0.0.1';
+    port = port || '6379';
+
+    this.debug(`Connecting to ${host}:${port}`);
+
+    try {
+      this.pubsub = await createRedisPubSub(port, host, this);
+    } catch (err) {
+      console.log(err);
+      this.connecting = false;
+      return;
+    }
+    this.debug(`PubSub connected`);
+    this.connecting = false;
   }
 
   getProxy() {
     invariant(this.pubsub, 'Redis PubSub has not been started');
 
-    const emitProxyRequest = this.pubsub.sendMessage(PROXY_REQUEST).bind(this);
+    debug(`Requesting proxy`);
+
     this.onceMessage(PROXY_SUPPLY, this.onProxySupply);
+    this.once(PROXY_READY, this.onProxyReady);
+
+    const emitProxyRequest = this.pubsub.sendMessage(PROXY_REQUEST).bind(this);
     this.proxyRequesterInterval = setInterval(emitProxyRequest, PROXY_REQUEST_INTERVAL);
 
     emitProxyRequest();
 
     return new Promise((resolve, reject) => {
       this.proxyResolver = resolve;
-      this.once(PROXY_READY, this.onProxyReady);
 
       this.proxyRequesterTimeout = setTimeout(() => {
+        this.debug(`Proxy request timeout`);
         this.removeHandlers();
         reject(createError(408));
       }, PROXY_REQUEST_TIMEOUT);
@@ -49,6 +92,7 @@ export default class Client extends EventEmitter {
   }
 
   onProxySupply({ hostId }) {
+    this.debug(`Proxy supply in ${hostId}`);
     this.removeHandlers();
     this.pubsub.message(PROXY_LINK, hostId);
     this.pubsub.onceMessage(PROXY_LINK, this.onProxyLink);
@@ -56,6 +100,7 @@ export default class Client extends EventEmitter {
   }
 
   onProxyLink(data) {
+    this.debug(`Proxy link from ${inspect(data)}`);
     this.removeHandlers();
     this.proxy = new ProxyLink(data);
     this.pubsub.once(PROXY_DROP, this.onProxyDrop);
@@ -63,7 +108,8 @@ export default class Client extends EventEmitter {
     this.emit(PROXY_READY, this.proxy);
   }
 
-  onProxyReady() {
+  onProxyReady(proxy) {
+    this.debug(`Proxy is ready`);
     this.removeHandlers();
     const proxyResolver = this.proxyResolver;
     this.proxyResolver = null;
@@ -71,6 +117,7 @@ export default class Client extends EventEmitter {
   }
 
   onProxyLinkDrop() {
+    this.debug(`Proxy link request dropped`);
     this.removeHandlers();
     this.getProxy();
   }
@@ -90,6 +137,7 @@ export default class Client extends EventEmitter {
   }
 
   destroy() {
+    this.debug(`Destroying client`);
     this.removeHandlers();
     this.pubsub.removeAllListeners();
     this.pubsub.removeAllMessageListeners();
@@ -99,45 +147,5 @@ export default class Client extends EventEmitter {
       this.proxy.stop();
       this.proxy = null;
     }
-  }
-}
-
-class ProxyLink {
-  constructor({ client, host, port, clusterId }) {
-    this.active = true;
-    this.host = host;
-    this.port = port;
-    this.client = client;
-    this.clusterId = clusterId;
-    this.heartbeatInterval = null;
-    this.onProxyDrop = ::this.onProxyDrop;
-
-    this.heartbeatInterval = setInterval(::this.emitHeartbeat, PROXY_LINK_HEARTBEAT);
-
-    this.client.onceMessage(PROXY_DROP, this.onProxyDrop);
-  }
-
-  startHeartbeats() {
-    this.heartbeatInterval = setInterval(::this.emitHeartbeat, PROXY_LINK_HEARTBEAT);
-  }
-
-  emitHeartbeat() {
-    this.client.sendMessage(PROXY_HEARTBEAT, this.clusterId, {
-      port: this.port
-    });
-  }
-
-  stop() {
-
-  }
-
-  onProxyDrop() {
-    clearInterval(this.heartbeatInterval);
-    this.client.removeListener(PROXY_DROP, this.onProxyDrop);
-    this.client.emit(PROXY_DROP);
-    this.active = false;
-    this.host = null;
-    this.port = null;
-    this.client = null;
   }
 }

@@ -6,8 +6,8 @@ import assert from 'assert';
 import THS from 'ths';
 
 const debug = require('debug')('cluster');
-const TOR_GATEWAYS = parseInt(process.env.TOR_GATEWAYS);
-const PORT_RANGE_START = parseInt(process.env.PORT_RANGE_START);
+const TOR_GATEWAYS = parseInt(process.env.TOR_GATEWAYS, 10);
+const PORT_RANGE_START = parseInt(process.env.PORT_RANGE_START, 10);
 const onTorError = ::console.error;
 const onTorMessage = ::console.log;
 
@@ -50,9 +50,9 @@ export default class THSCluster {
 
   addInstance() {
     const instanceCount = this.instances.length;
-    const ctrlPort  = PORT_RANGE_START + TOR_GATEWAYS + instanceCount;
+    const ctrlPort = PORT_RANGE_START + TOR_GATEWAYS + instanceCount;
     const thsPort = PORT_RANGE_START + instanceCount;
-    const thsPath  = `${this.dataDir}/${thsPort}`;
+    const thsPath = `${this.dataDir}/${thsPort}`;
     const serviceName = `port_${thsPort}`;
 
     debug(`Creating instance in port: ${thsPort}. ctrlPort: ${ctrlPort}`);
@@ -87,7 +87,7 @@ export default class THSCluster {
   get services() {
     const list = reduce(this.instances, (list, ths) => {
       if (ths.isTorRunning()) {
-        let services = ths.getServices();
+        const services = ths.getServices();
         if (services.length) {
           list.push(services[0]);
         }
@@ -126,6 +126,6 @@ export default class THSCluster {
       return null;
     }
 
-    return parseInt(service.ports[0]);
+    return parseInt(service.ports[0], 10);
   }
 }

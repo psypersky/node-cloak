@@ -1,3 +1,3 @@
-require("babel-polyfill");
+require('babel-polyfill');
 require('babel-core/register');
-require('./lib/cloak');
+require('./src/cloak');

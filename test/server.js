@@ -1,7 +1,7 @@
 import { times, uniq } from 'lodash';
 import { expect } from 'chai';
 import request from 'supertest';
-import createServer from '../lib/server';
+import createServer from '../src/server';
 
 describe('Server', function() {
   const app = createServer();

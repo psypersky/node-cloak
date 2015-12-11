@@ -1,4 +1,6 @@
 import redisPubSub from 'redis-pubsub-emitter';
+import createError from 'http-errors';
+import ms from 'ms';
 
 const prototype = {
   send(event, data) {
@@ -47,7 +49,7 @@ const prototype = {
   },
   offMessage(event, func) {
     const toRemove = [];
-    for (arr of this._onMessageHandlers) {
+    for (const arr of this._onMessageHandlers) {
       const [event, fn, wrappedFn] = arr;
       if (func === fn) {
         toRemove.push(arr);
@@ -57,10 +59,10 @@ const prototype = {
 
     this._onErrorHandlers = this._onErrorHandlers.filter((arr) => {
       return toRemove.indexOf(arr) < 0;
-    })
+    });
   },
   removeAllMessagelisteners() {
-    for ([event, fn, wrappedFn] of this._onMessageHandlers) {
+    for (const [event, , wrappedFn] of this._onMessageHandlers) {
       this.removeListener(event, wrappedFn);
     }
 
@@ -68,16 +70,15 @@ const prototype = {
   }
 };
 
-export default function createRedisPubSub(port, host, client) {
-  let pubsub = redisPubSub.createClient(port, host);
-
-  pubsub = Object.assign(pubsub, prototype, { client });
-
+const createRedisPubSub = function(port, host, client) {
   return new Promise((resolve, reject) => {
+    let pubsub = redisPubSub.createClient(port, host);
+    pubsub = Object.assign(pubsub, prototype, { client });
+
     const timeout = setTimeout(() => {
-      pubsub.removeListener('ready', onReady);
-      reject();
-    }, ms(5, 'seconds'));
+      pubsub.removeListener('ready', onReady); // eslint-disable-line
+      reject(createError(504, 'Redis connection timeout'));
+    }, ms('5s'));
 
     const onReady = () => {
       clearTimeout(timeout);
@@ -86,4 +87,6 @@ export default function createRedisPubSub(port, host, client) {
 
     pubsub.once('ready', onReady);
   });
-}
+};
+
+export { createRedisPubSub };

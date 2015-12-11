@@ -7,9 +7,9 @@ import Cluster from './cluster';
 const defaultClusterPath = path.resolve(__dirname, '..', 'data');
 
 export default function createServer(cluster) {
-  cluster = cluster || new Cluster(defaultClusterPath)
+  cluster = cluster || new Cluster(defaultClusterPath);
 
-  const router = Router();
+  const router = new Router();
 
   router.get('/', function(ctx) {
     ctx.status(200);
@@ -30,7 +30,7 @@ export default function createServer(cluster) {
     if (!cluster.starting && !cluster.ready) {
       await cluster.connect();
     }
-  }
+  };
 
   return app;
 }

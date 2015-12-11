@@ -4,7 +4,7 @@ import debug from 'debug';
 import path from 'path';
 import { times, uniq } from 'lodash';
 import { expect } from 'chai';
-import Cluster from '../lib/cluster';
+import Cluster from '../src/cluster';
 
 const { TOR_GATEWAYS } = process.env;
 
@@ -47,7 +47,7 @@ describe('Cluster', function() {
 
   it('should return two different IP addresses', async () => {
     const promises = times(TOR_GATEWAYS, () => {
-      let port = cluster.getPort();
+      const port = cluster.getPort();
       return requestWithSocks5Proxy('http://icanhazip.com', port);
     });
 
@@ -64,16 +64,16 @@ function requestWithSocks5Proxy(href, port) {
     params.socksHost = '127.0.0.1';
 
     const req = shttp.get({
-        hostname: 'icanhazip.com',
-        socksPort: port,
-        socksHost: '127.0.0.1',
-        path: '/',
-        rejectUnauthorized: true // This is the default.
+      hostname: 'icanhazip.com',
+      socksPort: port,
+      socksHost: '127.0.0.1',
+      path: '/',
+      rejectUnauthorized: true // This is the default.
     }, function(res) {
-        res.setEncoding('utf8');
-        res.on('readable', function() {
-            resolve(res.read());
-        });
+      res.setEncoding('utf8');
+      res.on('readable', function() {
+        resolve(res.read());
+      });
     });
 
     req.on('error', reject);
