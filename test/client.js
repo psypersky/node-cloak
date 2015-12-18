@@ -1,9 +1,8 @@
 import { expect } from 'chai';
-import sinon from 'sinon';
 import Client from '../src/client';
-import constants from '../src/constants';
-
-const { PROXY_REQUEST, PROXY_SUPPLY } = constants;
+import fakeProvider from './fake-provider';
+// import sinon from 'sinon';
+// const spy = sinon.spy();
 
 describe('Client', function() {
   it('should connect to redis and wait for ready state', async () => {
@@ -22,11 +21,10 @@ describe('Client', function() {
 
     expect(client.connecting).to.equal(false);
     expect(client.pubsub).to.be.an('object');
+    client.destroy();
   });
 
-  it('should try to get a proxy and timeout', async () => {
-    const spy = sinon.spy();
-
+  it('should try to get a proxy and timeout', async (done) => {
     const config = {
       requestTimeout: 90,
       requestInterval: 20
@@ -36,6 +34,48 @@ describe('Client', function() {
 
     await client.connect();
 
-    client.on('');
+    client.onProxyError((err) => {
+      expect(err).to.be.an('Object');
+      client.destroy();
+      done();
+    });
+
+    await client.createProxy();
   });
+
+  it('should get a fake proxy', async function(done) {
+    fakeProvider();
+    const client = new Client();
+    await client.connect();
+    client.createProxy();
+
+    client.onProxyReady((proxy) => {
+      expect(proxy.hostId).to.be.equal('fake_provider');
+      expect(proxy.host).to.be.equal('127.0.0.1');
+      expect(proxy.port).to.be.equal('8080');
+      client.destroy();
+      done();
+    });
+
+    client.onProxyDown((err) => {
+      client.destroy();
+      done(err);
+    });
+
+    client.onProxyError((err) => {
+      client.destroy();
+      done(err);
+    });
+  });
+
+  it.skip('should create and return a proxy', async () => {
+    const client = new Client();
+    client.connect();
+    client.createProxy();
+    client.onProxyDrop((reason) => { console.log('Proxy drop: ', reason); });
+    client.onProxyLink((proxy) => { console.log('Got proxy: ', proxy); });
+    client.onProxyError((err) => { console.log('Proxy Error: ', err); });
+  });
+
+  // Should Get a proxy
 });

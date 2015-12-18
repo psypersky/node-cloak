@@ -1,26 +1,36 @@
 import ms from 'ms';
+import { EventEmitter } from 'events';
 import constants from './constants';
 
-const { PROXY_HEARTBEAT, PROXY_DROP } = constants;
-const PROXY_HEARTBEAT_INTERVAL = ms(10, 'seconds');
-const debug = require('debug')('cloak:ProxyLink');
+const { NETWORK_PROXY_HEARTBEAT, CLIENT_PROXY_LINK_TIMEOUT } = constants;
+const PROXY_HEARTBEAT_INTERVAL = ms('1 second');
+const PROXY_TTL = ms('5 seconds');
+const debug = require('debug')('nc:proxyLink');
 
-export default class ProxyLink {
-  constructor({ client, host, port, clusterId }) {
+/** Holds the proxy information
+ *  emits heatbeats to the provider using the client to send events
+ *  listen to providers heartbeats and kill proxy on timeout
+ */
+
+export default class ProxyLink extends EventEmitter {
+  constructor(client, { hostId, data: { host, port } }) {
+    super();
     this.active = true;
     this.host = host;
     this.port = port;
     this.client = client;
-    this.clusterId = clusterId;
-    this.heartbeatInterval = null;
-    this.onProxyDrop = ::this.onProxyDrop;
+    this.hostId = hostId;
+    this.providerHeartbeatInterval = null;
 
-    this.debug(`Starting heartbeat interval`);
-    this.heartbeatInterval = setInterval(::this.emitHeartbeat, PROXY_HEARTBEAT_INTERVAL);
+    this.onHeartbeat = ::this.onHeartbeat;
+    this.onTimeout = ::this.onTimeout;
 
-    this.client.onceMessage(PROXY_DROP, this.onProxyDrop);
+    this.providerHeartbeatInterval = setInterval(::this.emitHeartbeat, PROXY_HEARTBEAT_INTERVAL);
 
-    this.debug(`Created proxy link`);
+    this.client.pubsub.onMessage(NETWORK_PROXY_HEARTBEAT, this.onHeartbeat);
+    this.TTLTimeoutId = setTimeout(this.onTimeout, PROXY_TTL);
+
+    debug(`created proxy link ${host} ${port} ${hostId}`);
   }
 
   debug(msg) {
@@ -29,25 +39,29 @@ export default class ProxyLink {
 
   emitHeartbeat() {
     this.debug(`Heartbeat`);
-    this.client.sendMessage(PROXY_HEARTBEAT, this.clusterId, {
+    this.client.pubsub.sendMessage(NETWORK_PROXY_HEARTBEAT, this.hostId, {
       port: this.port
     });
   }
 
-  stop() {
-    this.debug(`Stopping (todo)`);
-    // todo
+  onHeartbeat() {
+    debug('received heartbeat');
+    clearTimeout(this.TTLTimeoutId);
+    this.TTLTimeoutId = setTimeout(this.onTimeout, PROXY_TTL);
   }
 
-  onProxyDrop() {
-    this.debug(`Dropping proxy`);
-
-    clearInterval(this.heartbeatInterval);
-    this.client.removeListener(PROXY_DROP, this.onProxyDrop);
-    this.client.emit(PROXY_DROP);
+  stop() {
+    debug('killing proxy link');
+    clearInterval(this.providerHeartbeatInterval);
+    this.removeAllListeners();
     this.active = false;
     this.host = null;
     this.port = null;
     this.client = null;
+  }
+
+  onTimeout() {
+    debug('connection with the provider lost');
+    this.emit(CLIENT_PROXY_LINK_TIMEOUT);
   }
 }

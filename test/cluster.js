@@ -9,7 +9,7 @@ import Cluster from '../src/cluster';
 const { TOR_GATEWAYS } = process.env;
 
 describe('Cluster', function() {
-  this.timeout(300000); // 5 minutes
+  this.timeout(30000);
 
   const cluster = new Cluster(path.resolve(__dirname, 'data'));
 
