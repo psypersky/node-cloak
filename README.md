@@ -1,8 +1,49 @@
-# cloak
-todo: write readme
+# NigthCrawler (Work in progress)
+
+The idea is that you use the client to ask for fresh tor proxies to a cloud of a redis pub-sub servers,
+ideal to use in scrapers
+
+[Short Description here]
 
 ### Dependencies
 - Tor
+- Redis
+
+Client Overview
+
+    const client = new Client();
+    await client.connect();
+    client.createProxy();
+
+    client.onProxyReady((proxy) => {
+        console.log('Got proxy', proxy);
+    });
+
+    client.onProxyDown((err) => {
+      done(err);
+    });
+
+    client.onProxyError((err) => {
+      done(err);
+    });
+
+
+Provider Overview
+
+    const provider = new Provider();
+
+    await provider.connect();
+
+    await provider.createCluster();
+
+    provider.startProviding();
+
+
+
+
+
+
+
 
 
 Redis PubSub

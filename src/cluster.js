@@ -5,28 +5,35 @@ import mkdirp from 'mkdirp';
 import assert from 'assert';
 import THS from 'ths';
 
-const debug = require('debug')('cluster');
-const TOR_GATEWAYS = parseInt(process.env.TOR_GATEWAYS, 10);
-const PORT_RANGE_START = parseInt(process.env.PORT_RANGE_START, 10);
+const debug = require('debug')('nc:cluster');
 const onTorError = ::console.error;
-const onTorMessage = ::console.log;
+const onTorMessage = debug;
 
 /**
- * Creates a pool of tor hidden service instances.
+ *Creates a pool of tor hidden service instances.
+ * Each instance is a different TOR process
  *
  * @param  {String}  dataDir  The root directory to be used for instance data
+ * @param {String} [providerId] The provider's id to debug propuses
  */
 export default class THSCluster {
-  constructor(dataDir) {
+  constructor(dataDir, torGateways = 2, portRangeStart = 10770, providerId) {
     this.starting = false;
     this.ready = false;
     this.dataDir = dataDir;
-    this.instances = [];
-    this.serviceRotationIndex = 0;
+    this.freeInstances = [];
+    this.bussyInstances = [];
+    this.debugRef = providerId ? `[${this.id}] ` : '';
+    this.torGateways = torGateways;
+    this.portRangeStart = portRangeStart;
 
-    debug(`Creating cluster in ${dataDir} with ${TOR_GATEWAYS} instances`);
+    debug(`Creating cluster in ${dataDir} with ${torGateways} instances`);
 
-    times(TOR_GATEWAYS, ::this.addInstance);
+    times(torGateways, ::this.addInstance);
+  }
+
+  debug(msg) {
+    debug(`${this.debugRef}${msg}`);
   }
 
   /**
@@ -40,7 +47,7 @@ export default class THSCluster {
 
     console.log('Connecting Tor processes...');
 
-    await Promise.all(this.instances.map((ths) => ths.start(true)));
+    await Promise.all(this.freeInstances.map((ths) => ths.start(true)));
 
     this.starting = false;
     this.ready = true;
@@ -50,8 +57,8 @@ export default class THSCluster {
 
   addInstance() {
     const instanceCount = this.instances.length;
-    const ctrlPort = PORT_RANGE_START + TOR_GATEWAYS + instanceCount;
-    const thsPort = PORT_RANGE_START + instanceCount;
+    const thsPort = this.portRangeStart + instanceCount;
+    const ctrlPort = this.portRangeStart + this.torGateways + instanceCount;
     const thsPath = `${this.dataDir}/${thsPort}`;
     const serviceName = `port_${thsPort}`;
 
@@ -77,7 +84,7 @@ export default class THSCluster {
       ths.createHiddenService(serviceName, thsPort, true);
     }
 
-    this.instances.push(ths);
+    this.freeInstances.push(ths);
   }
 
   /**
@@ -101,31 +108,49 @@ export default class THSCluster {
   }
 
   /**
-   * Gets a difference service every time this method is invoked.
-   * @return {Object}  A tor hidden service definition.
+   * Get a not currently in use port and set the port as bussy
+   *
+   * TODO: Could we have a service with no ports in this phase?
    */
-  getService() {
-    this.serviceRotationIndex++;
-
-    const services = this.services;
-    const port = PORT_RANGE_START + this.serviceRotationIndex;
-    let service = findWhere(services, { name: `port_${port}` });
-
-    if (!service) {
-      this.serviceRotationIndex = 0;
-      service = services[0];
+  getInstance() {
+    if (this.freeInstances.length) {
+      const thsInstance = this.freeInstances.pop();
+      this.bussyInstances.unshift(thsInstance);
+      return thsInstance;
+      // TODO
+      // TODO: Could we have services with no ports?
     }
-
-    return service;
+    return null;
   }
 
-  getPort() {
-    const service = this.getService();
+  /**
+   * Returns the number of available ports
+   */
+  getFreeInstancesCount() {
+    return this.freeInstances.length;
+  }
 
-    if (!service || !service.ports.length) {
-      return null;
+  /**
+   * Renew the ip of the instance and send it to the
+   * free instances array after that
+   *
+   * @param {number} port
+   */
+  async freeAndRenewInstance(instance) {
+
+    const index = this.bussyInstances.indexOf(instance);
+    if (index === -1) {
+      return false;
     }
 
-    return parseInt(service.ports[0], 10);
+    await instance.cleanCircuits();
+    const thsInstance = this.bussyInstances.splice(index, 1);
+    this.freeInstances.push(thsInstance);
+    return true;
   }
 }
+
+
+
+
+

@@ -11,7 +11,10 @@ const { TOR_GATEWAYS } = process.env;
 describe('Cluster', function() {
   this.timeout(30000);
 
-  const cluster = new Cluster(path.resolve(__dirname, 'data'));
+  const cluster = new Cluster(path.resolve(__dirname, 'data'), 3);
+  let instance1;
+  let instance2;
+  let instance3;
 
   before(async () => {
     debug.enable('Tor');
@@ -22,32 +25,35 @@ describe('Cluster', function() {
     expect(cluster.ready).to.equal(true);
   });
 
-  it('should get a service instance', () => {
-    expect(cluster.getService).to.be.a('function');
-    expect(cluster.getService()).to.be.an('object');
-    expect(cluster.getService().name).to.not.be.empty; // eslint-disable-line
-    expect(cluster.getService().ports.length).to.not.be.empty; // eslint-disable-line
+  it('should get the number of available ports', () => {
+    expect(cluster.getFreeInstancesCount()).to.be.a('number');
+    expect(cluster.getFreeInstancesCount()).to.equal(3);
   });
 
-  it('should get a port', () => {
-    expect(cluster.getPort()).to.be.a('number');
+  it('shoud get an instance', () => {
+    instance1 = cluster.getInstance();
+    expect(instance1).to.be.an('object');
+    expect(instance.name).to.not.be.empty; // eslint-disable-line
+    expect(instance.ports.length).to.not.be.empty; // eslint-disable-line
   });
 
-  it('should rotate and return different ports', function() {
-    if (TOR_GATEWAYS < 2) {
-      console.warn('The rotation test requires at least two instances.');
-      return this.skip();
-    }
+  it('shoud get all available instances', () => {
+    expect(cluster.getFreeInstancesCount()).to.equal(2);
+    instance2 = cluster.getInstance();
+    instance3 = cluster.getInstance();
+    expect(cluster.getFreeInstancesCount()).to.equal(0);
+  });
 
-    const ports = times(TOR_GATEWAYS, () => cluster.getPort());
-
-    expect(ports).to.not.be.empty; // eslint-disable-line
-    expect(ports.length).to.equal(uniq(ports).length);
+  it('shoud free all instances', async () => {
+    await cluster.freeAndRenewInstance(instance1);
+    await cluster.freeAndRenewInstance(instance2);
+    await cluster.freeAndRenewInstance(instance3);
+    expect(cluster.getFreeInstancesCount()).to.equal(3);
   });
 
   it('should return two different IP addresses', async () => {
     const promises = times(TOR_GATEWAYS, () => {
-      const port = cluster.getPort();
+      const port = cluster.getFreePort();
       return requestWithSocks5Proxy('http://icanhazip.com', port);
     });
 
